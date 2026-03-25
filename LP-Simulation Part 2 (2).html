@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulasi LP — Optimisasi Produksi Pabrik</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f14;
+    --bg2: #13161e;
+    --bg3: #1a1e28;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --text: #e8eaf0;
+    --text2: #8b8fa8;
+    --text3: #555870;
+    --blue: #4a9eff;
+    --blue-dim: rgba(74,158,255,0.12);
+    --amber: #f5a623;
+    --amber-dim: rgba(245,166,35,0.12);
+    --green: #3ecf8e;
+    --green-dim: rgba(62,207,142,0.1);
+    --red: #ff6b6b;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+  }
+
+  html { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; }
+
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(74,158,255,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 30% at 10% 80%, rgba(62,207,142,0.04) 0%, transparent 50%),
+      var(--bg);
+  }
+
+  /* LAYOUT */
+  .shell {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 20px 60px;
+  }
+
+  /* HEADER */
+  .header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 36px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .header-left .badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .12em;
+    color: var(--blue);
+    background: var(--blue-dim);
+    border: 0.5px solid rgba(74,158,255,0.25);
+    padding: 3px 10px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    display: inline-block;
+    margin-bottom: 10px;
+  }
+  h1 {
+    font-size: clamp(22px, 4vw, 34px);
+    font-weight: 600;
+    letter-spacing: -.02em;
+    line-height: 1.1;
+    color: var(--text);
+  }
+  h1 span { color: var(--blue); }
+  .header p {
+    margin-top: 8px;
+    color: var(--text2);
+    font-size: 13px;
+    max-width: 440px;
+    line-height: 1.6;
+  }
+
+  /* METRICS ROW */
+  .metrics-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .metric {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .metric:hover { border-color: var(--border2); }
+  .metric::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+  }
+  .metric-label { font-size: 11px; color: var(--text3); font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+  .metric-val { font-size: 26px; font-weight: 600; color: var(--text); letter-spacing: -.02em; }
+  .metric-val span { font-size: 13px; font-weight: 400; color: var(--text2); margin-left: 2px; }
+  .metric.highlight { border-color: rgba(62,207,142,0.25); background: linear-gradient(135deg, var(--bg2), rgba(62,207,142,0.04)); }
+  .metric.highlight .metric-val { color: var(--green); }
+
+  /* MAIN GRID */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* PANEL (controls) */
+  .panel {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 14px 18px;
+    border-bottom: 0.5px solid var(--border);
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-header::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--blue);
+    flex-shrink: 0;
+  }
+  .panel-body { padding: 18px; }
+
+  .product-block { margin-bottom: 20px; }
+  .product-block:last-child { margin-bottom: 0; }
+
+  .product-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .product-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .pip {
+    width: 24px; height: 24px;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    font-family: var(--mono);
+    font-weight: 500;
+  }
+  .pip-blue { background: var(--blue-dim); color: var(--blue); border: 0.5px solid rgba(74,158,255,0.3); }
+  .pip-amber { background: var(--amber-dim); color: var(--amber); border: 0.5px solid rgba(245,166,35,0.3); }
+
+  .ctrl { margin-bottom: 10px; }
+  .ctrl-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+  .ctrl-name { font-size: 11px; color: var(--text2); }
+  .ctrl-val { font-family: var(--mono); font-size: 12px; color: var(--text); font-weight: 500; }
+
+  input[type=number] {
+    width: 100%;
+    background: var(--bg3);
+    border: 0.5px solid var(--border2);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color .15s;
+    -moz-appearance: textfield;
+  }
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number]:focus { border-color: var(--blue); }
+  input[type=number]:hover { border-color: rgba(255,255,255,0.2); }
+
+  .divider { border: none; border-top: 0.5px solid var(--border); margin: 16px 0; }
+
+  /* FORMULASI BOX */
+  .formula-box {
+    background: var(--bg3);
+    border: 0.5px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 2;
+    color: var(--text2);
+    margin-top: 14px;
+  }
+  .formula-box .obj { color: var(--green); font-weight: 500; }
+  .formula-box .con { color: var(--text2); }
+  .formula-box .highlight-blue { color: var(--blue); }
+  .formula-box .highlight-amber { color: var(--amber); }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--bg3);
+    padding: 4px;
+    border-radius: 8px;
+    margin-bottom: 14px;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 7px 0;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text2);
+    font-family: var(--sans);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .18s;
+    font-weight: 500;
+  }
+  .tab-btn.active {
+    background: var(--bg2);
+    color: var(--text);
+    border: 0.5px solid var(--border2);
+  }
+
+  /* CARD */
+  .card {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 14px 18px;
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .card-title {
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--text3);
+  }
+  .card-body { padding: 18px; }
+
+  /* CHART */
+  #chartWrap { position: relative; width: 100%; height: 360px; }
+
+  /* LEGEND */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 12px 18px;
+    border-top: 0.5px solid var(--border);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text2);
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .legend-line {
+    width: 18px; height: 2px;
+    border-radius: 1px;
+    flex-shrink: 0;
+  }
+
+  /* SIMPLEX STEPS */
+  .steps-list { display: flex; flex-direction: column; gap: 0; }
+  .step-item {
+    display: flex;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 0.5px solid var(--border);
+    position: relative;
+  }
+  .step-item:last-child { border-bottom: none; padding-bottom: 0; }
+  .step-num {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    min-width: 28px;
+    padding-top: 2px;
+    letter-spacing: .06em;
+  }
+  .step-content {}
+  .step-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    font-family: var(--mono);
+  }
+  .step-desc { font-size: 13px; color: var(--text2); line-height: 1.65; }
+  .step-eq {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg3);
+    border: 0.5px solid var(--border2);
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin: 4px 4px 0 0;
+    color: var(--green);
+  }
+  .step-item.active .step-num { color: var(--green); }
+  .step-item.active .step-title { color: var(--green); }
+
+  /* STATUS CHIP */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 9px;
+    border-radius: 2px;
+    letter-spacing: .06em;
+  }
+  .chip-green { background: var(--green-dim); color: var(--green); border: 0.5px solid rgba(62,207,142,0.25); }
+  .chip-green::before { content: '●'; font-size: 7px; }
+
+  /* SIMPLEX TABLE */
+  .simplex-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 12px;
+    margin-top: 12px;
+  }
+  .simplex-table th {
+    background: var(--bg3);
+    color: var(--text3);
+    font-weight: 400;
+    padding: 7px 10px;
+    text-align: center;
+    border: 0.5px solid var(--border);
+    font-size: 11px;
+    letter-spacing: .06em;
+  }
+  .simplex-table td {
+    padding: 7px 10px;
+    text-align: center;
+    border: 0.5px solid var(--border);
+    color: var(--text2);
+  }
+  .simplex-table tr:hover td { background: var(--bg3); }
+  .simplex-table .pivot { color: var(--amber); font-weight: 500; }
+  .simplex-table .opt { color: var(--green); font-weight: 500; }
+  .simplex-table .label-col { color: var(--text); text-align: left; }
+
+  /* RESPONSIVE */
+  @media (max-width: 780px) {
+    .main-grid { grid-template-columns: 1fr; }
+    .metrics-row { grid-template-columns: 1fr 1fr; }
+    .metrics-row .metric:last-child { grid-column: span 2; }
+  }
+  @media (max-width: 480px) {
+    .metrics-row { grid-template-columns: 1fr; }
+    .metrics-row .metric:last-child { grid-column: span 1; }
+  }
+
+  /* ANIMATIONS */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .shell > * { animation: fadeUp .4s ease both; }
+  .shell > *:nth-child(1) { animation-delay: 0s; }
+  .shell > *:nth-child(2) { animation-delay: .05s; }
+  .shell > *:nth-child(3) { animation-delay: .1s; }
+  .shell > *:nth-child(4) { animation-delay: .15s; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <div class="badge">Linear Programming · Simulasi Pabrik</div>
+      <h1>Optimisasi <span>Produksi</span><br>Pabrik</h1>
+      <p>Simulasi alokasi sumber daya optimal menggunakan metode Simplex. Ubah parameter dan lihat solusinya secara real-time.</p>
+    </div>
+  </div>
+
+  <!-- METRICS -->
+  <div class="metrics-row" id="metrics">
+    <div class="metric"><div class="metric-label">Produk A optimal</div><div class="metric-val" id="m-xA">—<span>unit</span></div></div>
+    <div class="metric"><div class="metric-label">Produk B optimal</div><div class="metric-val" id="m-xB">—<span>unit</span></div></div>
+    <div class="metric highlight"><div class="metric-label">Profit maksimal</div><div class="metric-val" id="m-profit">—<span>Rp ribu</span></div></div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+
+    <!-- LEFT: CONTROLS -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">Parameter Input</div>
+        <div class="panel-body">
+
+          <!-- PRODUK A -->
+          <div class="product-block">
+            <div class="product-label">
+              <span class="product-name">Produk A</span>
+              <span class="pip pip-blue">A</span>
+            </div>
+            <div class="ctrl">
+              <label class="ctrl-name">Profit per unit <small style="color:var(--text3)">(Rp ribu)</small></label>
+              <input type="number" min="0" step="1" value="5" id="pA" oninput="update()">
+            </div>
+            <div class="ctrl">
+              <label class="ctrl-name">Jam mesin per unit <small style="color:var(--text3)">(jam)</small></label>
+              <input type="number" min="0" step="1" value="2" id="mA" oninput="update()">
+            </div>
+            <div class="ctrl">
+              <label class="ctrl-name">Bahan baku per unit <small style="color:var(--text3)">(kg)</small></label>
+              <input type="number" min="0" step="1" value="4" id="bA" oninput="update()">
+            </div>
+          </div>
+
+          <hr class="divider">
+
+          <!-- PRODUK B -->
+          <div class="product-block">
+            <div class="product-label">
+              <span class="product-name">Produk B</span>
+              <span class="pip pip-amber">B</span>
+            </div>
+            <div class="ctrl">
+              <label class="ctrl-name">Profit per unit <small style="color:var(--text3)">(Rp ribu)</small></label>
+              <input type="number" min="0" step="1" value="4" id="pB" oninput="update()">
+            </div>
+            <div class="ctrl">
+              <label class="ctrl-name">Jam mesin per unit <small style="color:var(--text3)">(jam)</small></label>
+              <input type="number" min="0" step="1" value="3" id="mB" oninput="update()">
+            </div>
+            <div class="ctrl">
+              <label class="ctrl-name">Bahan baku per unit <small style="color:var(--text3)">(kg)</small></label>
+              <input type="number" min="0" step="1" value="2" id="bB" oninput="update()">
+            </div>
+          </div>
+
+          <hr class="divider">
+
+          <!-- KAPASITAS -->
+          <div class="product-block">
+            <div class="product-label"><span class="product-name">Kapasitas Pabrik</span></div>
+            <div class="ctrl">
+              <label class="ctrl-name">Total jam mesin tersedia <small style="color:var(--text3)">(jam)</small></label>
+              <input type="number" min="1" step="1" value="80" id="capM" oninput="update()">
+            </div>
+            <div class="ctrl">
+              <label class="ctrl-name">Total bahan baku tersedia <small style="color:var(--text3)">(kg)</small></label>
+              <input type="number" min="1" step="1" value="100" id="capB" oninput="update()">
+            </div>
+          </div>
+
+          <!-- FORMULASI -->
+          <div class="formula-box" id="formulasi">
+            <div class="obj">Maks Z = 5x₁ + 4x₂</div>
+            <div style="color:var(--text3);font-size:10px;margin:4px 0 2px">Kendala:</div>
+            <div class="highlight-blue">2x₁ + 3x₂ ≤ 80</div>
+            <div class="highlight-amber">4x₁ + 2x₂ ≤ 100</div>
+            <div style="color:var(--text3)">x₁, x₂ ≥ 0</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: TABS CONTENT -->
+    <div>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="showTab('grafik',this)">Visualisasi</button>
+        <button class="tab-btn" onclick="showTab('simplex',this)">Langkah Simplex</button>
+        <button class="tab-btn" onclick="showTab('tabel',this)">Tabel Simplex</button>
+      </div>
+
+      <!-- TAB: GRAFIK -->
+      <div id="tab-grafik">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Feasible Region & Titik Optimal</span>
+            <span class="chip chip-green" id="optLabel">Menghitung...</span>
+          </div>
+          <div class="card-body" style="padding:14px 18px 0">
+            <div id="chartWrap"><canvas id="myChart"></canvas></div>
+          </div>
+          <div class="legend" id="legend">
+            <div class="legend-item"><div class="legend-line" style="background:#4a9eff"></div>Kendala mesin</div>
+            <div class="legend-item"><div class="legend-line" style="background:#f5a623;border-top:2px dashed #f5a623;height:0"></div>Kendala bahan</div>
+            <div class="legend-item"><div class="legend-line" style="background:#3ecf8e"></div>Z optimal</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#3ecf8e;border-radius:50%"></div>Titik optimal</div>
+            <div class="legend-item"><div class="legend-dot" style="background:rgba(74,158,255,0.2);border:1px solid rgba(74,158,255,0.4)"></div>Feasible region</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: SIMPLEX -->
+      <div id="tab-simplex" style="display:none">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Step-by-step Metode Simplex</span>
+            <span class="chip chip-green" id="simplex-status">Optimal</span>
+          </div>
+          <div class="card-body">
+            <div class="steps-list" id="steps-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: TABEL -->
+      <div id="tab-tabel" style="display:none">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Tabel Simplex</span>
+            <span class="chip chip-green">Iterasi final</span>
+          </div>
+          <div class="card-body" style="overflow-x:auto">
+            <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Tabel simplex pada solusi optimal. Kolom pivot ditandai warna kuning.</div>
+            <table class="simplex-table" id="simplex-table"></table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+let chart = null;
+let currentTab = 'grafik';
+
+function showTab(t, btn) {
+  currentTab = t;
+  ['grafik','simplex','tabel'].forEach(id => {
+    document.getElementById('tab-'+id).style.display = id === t ? 'block' : 'none';
+  });
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (t === 'grafik') renderChart();
+  if (t === 'simplex') renderSimplex();
+  if (t === 'tabel') renderTabel();
+}
+
+function getVals() {
+  const g = id => parseFloat(document.getElementById(id).value);
+  return { pA:g('pA'), pB:g('pB'), mA:g('mA'), mB:g('mB'), bA:g('bA'), bB:g('bB'), capM:g('capM'), capB:g('capB') };
+}
+
+function solve(v) {
+  const corners = [{x:0,y:0}];
+  if (v.mB>0) corners.push({x:0,y:v.capM/v.mB});
+  if (v.bB>0) corners.push({x:0,y:v.capB/v.bB});
+  if (v.mA>0) corners.push({x:v.capM/v.mA,y:0});
+  if (v.bA>0) corners.push({x:v.capB/v.bA,y:0});
+  const det = v.mA*v.bB - v.mB*v.bA;
+  if (Math.abs(det) > 0.001) {
+    const xi = (v.capM*v.bB - v.mB*v.capB)/det;
+    const yi = (v.mA*v.capB - v.capM*v.bA)/det;
+    if (xi>=-0.001 && yi>=-0.001) corners.push({x:Math.max(0,xi),y:Math.max(0,yi)});
+  }
+  const feasible = corners.filter(p =>
+    p.x>=-0.001 && p.y>=-0.001 &&
+    v.mA*p.x+v.mB*p.y<=v.capM+0.001 &&
+    v.bA*p.x+v.bB*p.y<=v.capB+0.001
+  );
+  let best=null, bestVal=-Infinity;
+  for (const p of feasible) {
+    const profit=v.pA*p.x+v.pB*p.y;
+    if (profit>bestVal){bestVal=profit;best=p;}
+  }
+  return {corners:feasible, optimal:best, profit:bestVal};
+}
+
+function update() {
+  const v = getVals();
+  // Guard: skip if any value is invalid
+  if (Object.values(v).some(x => isNaN(x) || x <= 0)) return;
+
+  const sol = solve(v);
+  const xA = sol.optimal ? sol.optimal.x.toFixed(1) : '—';
+  const xB = sol.optimal ? sol.optimal.y.toFixed(1) : '—';
+  const pr = sol.optimal ? Math.round(sol.profit) : '—';
+  document.getElementById('m-xA').innerHTML = xA+'<span>unit</span>';
+  document.getElementById('m-xB').innerHTML = xB+'<span>unit</span>';
+  document.getElementById('m-profit').innerHTML = pr+'<span>Rp ribu</span>';
+
+  // Formulasi
+  document.getElementById('formulasi').innerHTML = `
+    <div class="obj">Maks Z = ${v.pA}x₁ + ${v.pB}x₂</div>
+    <div style="color:var(--text3);font-size:10px;margin:4px 0 2px">Kendala:</div>
+    <div class="highlight-blue">${v.mA}x₁ + ${v.mB}x₂ ≤ ${v.capM} <span style="color:var(--text3);font-size:10px">(mesin)</span></div>
+    <div class="highlight-amber">${v.bA}x₁ + ${v.bB}x₂ ≤ ${v.capB} <span style="color:var(--text3);font-size:10px">(bahan)</span></div>
+    <div style="color:var(--text3)">x₁, x₂ ≥ 0</div>
+  `;
+
+  if (currentTab === 'grafik') renderChart();
+  if (currentTab === 'simplex') renderSimplex();
+  if (currentTab === 'tabel') renderTabel();
+}
+
+function renderChart() {
+  const v = getVals();
+  const sol = solve(v);
+  const maxX = Math.max(v.capM/v.mA, v.capB/v.bA)*1.18;
+  const maxY = Math.max(v.capM/v.mB, v.capB/v.bB)*1.18;
+  const steps = 80;
+
+  const line1=[],line2=[];
+  for (let i=0;i<=steps;i++){
+    const x=(maxX*i)/steps;
+    if(v.mB>0) line1.push({x,y:(v.capM-v.mA*x)/v.mB});
+    if(v.bB>0) line2.push({x,y:(v.capB-v.bA*x)/v.bB});
+  }
+
+  // Convex hull for feasible polygon
+  const pts = [...sol.corners];
+  const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length;
+  const cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
+  pts.sort((a,b)=>Math.atan2(a.y-cy,a.x-cx)-Math.atan2(b.y-cy,b.x-cx));
+  const poly = [...pts,pts[0]];
+
+  const profLevels = [sol.profit*0.3, sol.profit*0.6, sol.profit];
+  const contours = profLevels.map(pr => {
+    const arr=[];
+    for(let i=0;i<=steps;i++){
+      const x=(maxX*i)/steps;
+      arr.push({x,y:(pr-v.pA*x)/v.pB});
+    }
+    return arr;
+  });
+
+  const gridCol='rgba(255,255,255,0.05)';
+  const textCol='#555870';
+
+  if(chart){chart.destroy();chart=null;}
+  chart = new Chart(document.getElementById('myChart'),{
+    type:'scatter',
+    data:{datasets:[
+      {
+        label:'Feasible',
+        data:poly,
+        borderColor:'rgba(74,158,255,0.35)',
+        backgroundColor:'rgba(74,158,255,0.1)',
+        fill:true,showLine:true,tension:0,pointRadius:0,order:4
+      },
+      {
+        label:'Kendala Mesin',
+        data:line1,
+        borderColor:'#4a9eff',backgroundColor:'transparent',
+        showLine:true,tension:0,pointRadius:0,borderWidth:1.5,order:3
+      },
+      {
+        label:'Kendala Bahan',
+        data:line2,
+        borderColor:'#f5a623',backgroundColor:'transparent',
+        showLine:true,tension:0,pointRadius:0,borderWidth:1.5,
+        borderDash:[6,3],order:3
+      },
+      ...contours.map((c,i)=>({
+        label:`Z${i}`,data:c,
+        borderColor: i===2?'#3ecf8e':'rgba(255,255,255,0.1)',
+        backgroundColor:'transparent',
+        showLine:true,tension:0,pointRadius:0,
+        borderWidth:i===2?2:1,
+        borderDash:i===2?[]:[3,5],
+        order:i===2?1:2
+      })),
+      {
+        label:'Optimal',
+        data:sol.optimal?[{x:sol.optimal.x,y:sol.optimal.y}]:[],
+        borderColor:'#3ecf8e',backgroundColor:'#3ecf8e',
+        pointRadius:8,pointHoverRadius:11,
+        showLine:false,order:0
+      },
+      {
+        label:'Corner points',
+        data:sol.corners,
+        borderColor:'rgba(255,255,255,0.3)',backgroundColor:'rgba(255,255,255,0.15)',
+        pointRadius:4,pointHoverRadius:6,showLine:false,order:1
+      }
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#1a1e28',
+          borderColor:'rgba(255,255,255,0.1)',
+          borderWidth:0.5,
+          titleColor:'#8b8fa8',
+          bodyColor:'#e8eaf0',
+          callbacks:{
+            label:ctx=>{
+              if(ctx.datasetIndex===6) return `Optimal: x₁=${ctx.raw.x.toFixed(1)}, x₂=${ctx.raw.y.toFixed(1)}, Z=${Math.round(sol.profit)}`;
+              return null;
+            }
+          }
+        }
+      },
+      scales:{
+        x:{
+          title:{display:true,text:'Produk A (x₁)',color:textCol,font:{size:11,family:"'IBM Plex Mono'"}},
+          min:0,max:Math.ceil(maxX),
+          grid:{color:gridCol},
+          ticks:{color:textCol,font:{size:10},maxTicksLimit:8}
+        },
+        y:{
+          title:{display:true,text:'Produk B (x₂)',color:textCol,font:{size:11,family:"'IBM Plex Mono'"}},
+          min:0,max:Math.ceil(maxY),
+          grid:{color:gridCol},
+          ticks:{color:textCol,font:{size:10},maxTicksLimit:8}
+        }
+      }
+    }
+  });
+
+  document.getElementById('optLabel').textContent = `Z* = Rp ${Math.round(sol.profit)}K`;
+}
+
+function renderSimplex() {
+  const v = getVals();
+  const sol = solve(v);
+  const xA = sol.optimal ? sol.optimal.x.toFixed(2) : '0';
+  const xB = sol.optimal ? sol.optimal.y.toFixed(2) : '0';
+  const sM = sol.optimal ? (v.capM - v.mA*sol.optimal.x - v.mB*sol.optimal.y).toFixed(2) : '0';
+  const sB = sol.optimal ? (v.capB - v.bA*sol.optimal.x - v.bB*sol.optimal.y).toFixed(2) : '0';
+  const enteringVar = v.pA >= v.pB ? 'x₁ (Produk A)' : 'x₂ (Produk B)';
+  const enterVal = Math.max(v.pA, v.pB);
+  const ratioM = v.pA>=v.pB ? (v.capM/v.mA).toFixed(2) : (v.capM/v.mB).toFixed(2);
+  const ratioB = v.pA>=v.pB ? (v.capB/v.bA).toFixed(2) : (v.capB/v.bB).toFixed(2);
+
+  const steps = [
+    {
+      num:'01', active:false,
+      title:'Formulasi standar',
+      desc:`Tentukan variabel keputusan: x₁ = unit Produk A, x₂ = unit Produk B. Fungsi tujuan:`,
+      eqs:[`Maks Z = ${v.pA}x₁ + ${v.pB}x₂`]
+    },
+    {
+      num:'02', active:false,
+      title:'Tambah slack variable',
+      desc:'Ubah kendala ≤ menjadi persamaan dengan menambahkan slack variable s₁ dan s₂:',
+      eqs:[`${v.mA}x₁ + ${v.mB}x₂ + s₁ = ${v.capM}`,`${v.bA}x₁ + ${v.bB}x₂ + s₂ = ${v.capB}`]
+    },
+    {
+      num:'03', active:false,
+      title:'Solusi awal (BFS)',
+      desc:`Set x₁=0, x₂=0. Basic feasible solution awal: s₁=${v.capM}, s₂=${v.capB}, Z=0. Ini adalah titik (0,0) pada grafik.`,
+      eqs:[]
+    },
+    {
+      num:'04', active:false,
+      title:'Entering variable',
+      desc:`Pilih variabel dengan koefisien terbesar di baris Z. Koefisien: x₁=${v.pA}, x₂=${v.pB}. Maka ${enteringVar} (nilai ${enterVal}) dipilih sebagai entering variable.`,
+      eqs:[]
+    },
+    {
+      num:'05', active:false,
+      title:'Minimum ratio test',
+      desc:`Hitung rasio untuk menentukan leaving variable:`,
+      eqs:[`Baris mesin: ${v.pA>=v.pB?v.capM:v.capM} / ${v.pA>=v.pB?v.mA:v.mB} = ${ratioM}`,`Baris bahan: ${v.pA>=v.pB?v.capB:v.capB} / ${v.pA>=v.pB?v.bA:v.bB} = ${ratioB}`,`Leaving: baris dengan rasio terkecil`]
+    },
+    {
+      num:'06', active:false,
+      title:'Operasi pivot',
+      desc:'Lakukan operasi baris (row reduction / eliminasi Gauss) pada elemen pivot untuk memperbarui seluruh tabel simplex. Ulangi iterasi hingga tidak ada koefisien positif di baris Z.',
+      eqs:[]
+    },
+    {
+      num:'07', active:true,
+      title:'Solusi optimal',
+      desc:'Semua koefisien baris Z ≤ 0. Solusi optimal tercapai:',
+      eqs:[`x₁ = ${xA} unit`, `x₂ = ${xB} unit`, `Z* = Rp ${Math.round(sol.profit)} ribu`, `Slack mesin s₁ = ${parseFloat(sM)<0.01?'0.00':sM} jam`, `Slack bahan s₂ = ${parseFloat(sB)<0.01?'0.00':sB} kg`]
+    }
+  ];
+
+  document.getElementById('steps-list').innerHTML = steps.map(s=>`
+    <div class="step-item ${s.active?'active':''}">
+      <div class="step-num">${s.num}</div>
+      <div class="step-content">
+        <div class="step-title">${s.title}</div>
+        <div class="step-desc">${s.desc}</div>
+        ${s.eqs.map(e=>`<span class="step-eq">${e}</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderTabel() {
+  const v = getVals();
+  const sol = solve(v);
+  const xA = sol.optimal ? sol.optimal.x.toFixed(2) : '0';
+  const xB = sol.optimal ? sol.optimal.y.toFixed(2) : '0';
+  const sM = sol.optimal ? Math.max(0, v.capM - v.mA*sol.optimal.x - v.mB*sol.optimal.y).toFixed(2) : '0';
+  const sB = sol.optimal ? Math.max(0, v.capB - v.bA*sol.optimal.x - v.bB*sol.optimal.y).toFixed(2) : '0';
+  const Z = Math.round(sol.profit);
+
+  // Determine basic variables
+  const xApositive = parseFloat(xA) > 0.01;
+  const xBpositive = parseFloat(xB) > 0.01;
+  const sMpositive = parseFloat(sM) > 0.01;
+  const sBpositive = parseFloat(sB) > 0.01;
+
+  document.getElementById('simplex-table').innerHTML = `
+    <thead>
+      <tr>
+        <th>Basis</th>
+        <th>x₁</th>
+        <th>x₂</th>
+        <th>s₁</th>
+        <th>s₂</th>
+        <th>RHS</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="label-col">${xApositive ? '<span style="color:#4a9eff">x₁</span>' : (sMpositive ? 's₁' : 'x₁')}</td>
+        <td class="${xApositive?'opt':''}">1</td>
+        <td>${xApositive ? (v.mB/v.mA).toFixed(3) : '—'}</td>
+        <td>${xApositive ? (1/v.mA).toFixed(3) : '1'}</td>
+        <td>0</td>
+        <td class="opt">${xApositive ? xA : sM}</td>
+      </tr>
+      <tr>
+        <td class="label-col">${xBpositive ? '<span style="color:#f5a623">x₂</span>' : (sBpositive ? 's₂' : 'x₂')}</td>
+        <td>0</td>
+        <td class="${xBpositive?'opt':''}">1</td>
+        <td>0</td>
+        <td>${xBpositive ? (1/v.bB).toFixed(3) : '1'}</td>
+        <td class="opt">${xBpositive ? xB : sB}</td>
+      </tr>
+      <tr style="border-top:1px solid rgba(255,255,255,0.12)">
+        <td class="label-col" style="color:var(--green);font-weight:500">Z</td>
+        <td class="opt">0</td>
+        <td class="opt">0</td>
+        <td class="pivot">${-(v.pA/v.mA).toFixed(2)}</td>
+        <td class="pivot">${-(v.pB/v.bB).toFixed(2)}</td>
+        <td class="opt">${Z}</td>
+      </tr>
+    </tbody>
+  `;
+}
+
+// INIT
+update();
+</script>
+</body>
+</html>
